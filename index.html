@@ -95,6 +95,12 @@
   .tag-title{font-family:'Fraunces',serif;font-weight:700;font-size:20px;margin:0 0 4px;}
   .tag-title-hi{font-family:'Noto Sans Devanagari',sans-serif;font-size:15px;color:#6b6355;margin:0 0 10px;}
   .price-pill{font-family:'IBM Plex Mono',monospace;background:var(--turmeric);color:var(--indigo);font-weight:600;font-size:14px;padding:8px 14px;border-radius:8px;white-space:nowrap;}
+  
+  /* NEW: Fair Price Cost Breakdown */
+  .cost-box { background: var(--cream-2); border-radius: 8px; padding: 12px 16px; margin: 16px 0 16px 22px; font-size: 13px; font-family: 'IBM Plex Mono', monospace; max-width: 300px;}
+  .cost-row { display: flex; justify-content: space-between; margin-bottom: 6px; }
+  .cost-total { font-weight: 700; border-top: 1px dashed var(--sage); padding-top: 8px; margin-top: 6px; color: var(--indigo); font-size: 14px;}
+
   .tag-desc{padding-left:22px;font-size:14px;line-height:1.6;margin:10px 0;}
   .tag-desc.hi{font-family:'Noto Sans Devanagari',sans-serif;}
   .meta-row{padding-left:22px;display:flex;flex-wrap:wrap;gap:8px;margin:12px 0;}
@@ -103,7 +109,13 @@
   .bar-track{flex:1;max-width:200px;height:6px;background:var(--cream-2);border-radius:100px;overflow:hidden;}
   .bar-fill{height:100%;background:var(--sage);}
   .tips{padding-left:22px;font-size:13px;color:#6b6355;margin-top:8px;font-style:italic;}
-  .push-row{padding-left:22px;display:flex;gap:8px;margin-top:18px;flex-wrap:wrap;}
+  
+  /* NEW: Beckn Payload Reveal */
+  .beckn-toggle { background: transparent; border: none; color: var(--indigo); font-size: 12px; font-weight: 600; text-decoration: underline; cursor: pointer; padding: 0; margin: 12px 0 0 22px; }
+  .beckn-code { display: none; background: #1e1e1e; color: #d4d4d4; padding: 14px; border-radius: 8px; font-family: 'IBM Plex Mono', monospace; font-size: 11px; margin: 8px 22px 0 22px; overflow-x: auto; position: relative; z-index: 2;}
+  .beckn-code.show { display: block; }
+
+  .push-row{padding-left:22px;display:flex;gap:8px;margin-top:18px;flex-wrap:wrap; position: relative; z-index: 2;}
   .push-btn{font-size:12px;font-weight:600;padding:8px 13px;border-radius:100px;border:1px solid var(--indigo);background:white;color:var(--indigo);cursor:pointer;}
   .push-btn.done{background:var(--sage);border-color:var(--sage);color:white;}
 
@@ -126,9 +138,9 @@
 
 <div class="hero">
   <div class="wrap">
-    <div class="eyebrow"><span class="dot"></span>SIH 2026 · PS 26090 · Ministry of Social Justice &amp; Empowerment</div>
+    <div class="eyebrow"><span class="dot"></span>SIH 2026 · PS 260900 · Ministry of Social Justice &amp; Empowerment</div>
     <h1>Kaarigar Sahayak — an AI business manager, in an artisan's pocket.</h1>
-    <p>Photograph a product, speak a few lines in your own language, and let AI write the listing, price it, translate it, and route it to India's digital marketplaces.</p>
+    <p>Photograph a product, speak a few lines in your own language, and let AI write the listing, verify fair pricing, and generate an ONDC Beckn-compliant catalog entry.</p>
     <span class="ps-tag">● Live demo — real AI calls, no mock data</span>
   </div>
 </div>
@@ -202,7 +214,7 @@
 
     <div class="stat-grid">
       <div class="stat"><div class="num" id="statItems">0</div><div class="lbl">Products cataloged</div></div>
-      <div class="stat"><div class="num" id="statReadiness">—</div><div class="lbl">Avg. marketplace readiness</div></div>
+      <div class="stat"><div class="num" id="statReadiness">—</div><div class="lbl">Avg. ONDC DigiReady Score</div></div>
       <div class="stat"><div class="num" id="statLangs">2</div><div class="lbl">Languages supported</div></div>
       <div class="stat"><div class="num" id="statChannels">3</div><div class="lbl">Marketplace channels</div></div>
     </div>
@@ -323,8 +335,6 @@ async function generateListing(){
       : "Provide fields in Hindi (Devanagari script) only, but still fill title_en/description_en with a short literal English gloss for internal use.";
 
   try{
-    // Calls our own serverless function (/api/generate-listing) — the Anthropic
-    // API key stays server-side and is never sent to the browser.
     const response = await fetch("/api/generate-listing", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -357,8 +367,17 @@ async function generateListing(){
 }
 
 function renderResult(listing, container, isNew){
-  const readinessPct = (listing.marketplace_readiness/10*100);
+  // Switched to new ondc_digiready_score
+  const readinessScore = listing.ondc_digiready_score || 0;
+  const readinessPct = (readinessScore/10*100);
   const showHi = listing.title_hi && listing.title_hi.trim().length>0;
+  
+  // Safe parsing for cost breakdown
+  const cost = listing.cost_breakdown || {};
+  const matCost = cost.materials_inr || 0;
+  const labCost = cost.labor_inr || 0;
+  const totalCost = cost.fair_market_price_inr || 0;
+
   const card = document.createElement('div');
   card.className = 'tag-card';
   card.innerHTML = `
@@ -368,20 +387,32 @@ function renderResult(listing, container, isNew){
         <p class="tag-title">${escapeHtml(listing.title_en||'')}</p>
         ${showHi ? `<p class="tag-title-hi hi">${escapeHtml(listing.title_hi)}</p>` : ''}
       </div>
-      <div class="price-pill">₹${listing.price_min_inr} – ₹${listing.price_max_inr}</div>
+      <div class="price-pill">₹${totalCost}</div>
     </div>
+    
     <p class="tag-desc">${escapeHtml(listing.description_en||'')}</p>
     ${showHi ? `<p class="tag-desc hi">${escapeHtml(listing.description_hi)}</p>` : ''}
+    
+    <div class="cost-box">
+      <div class="cost-row"><span>Estimated Materials:</span><span>₹${matCost}</span></div>
+      <div class="cost-row"><span>Estimated Labor/Time:</span><span>₹${labCost}</span></div>
+      <div class="cost-row cost-total"><span>Fair Market Value:</span><span>₹${totalCost}</span></div>
+    </div>
+
     <div class="meta-row">
       <span class="chip">${escapeHtml(listing.category||'')}</span>
       <span class="chip">${escapeHtml(listing.materials||'')}</span>
       ${(listing.tags||[]).map(t=>`<span class="chip">#${escapeHtml(t)}</span>`).join('')}
     </div>
+    
     <div class="readiness">
-      <span class="mono">${listing.marketplace_readiness}/10 ready</span>
+      <span class="mono">${readinessScore}/10 ONDC DigiReady</span>
       <div class="bar-track"><div class="bar-fill" style="width:${readinessPct}%"></div></div>
     </div>
-    <p class="tips">💡 ${escapeHtml(listing.price_reasoning||'')} — ${escapeHtml(listing.readiness_tip||'')}</p>
+    
+    <button class="beckn-toggle" onclick="this.nextElementSibling.classList.toggle('show')">View ONDC Beckn Payload</button>
+    <pre class="beckn-code">${escapeHtml(JSON.stringify(listing.ondc_beckn_payload, null, 2))}</pre>
+
     <div class="push-row">
       <button class="push-btn" data-channel="ondc">Push to ONDC</button>
       <button class="push-btn" data-channel="gem">Push to GeM Indiahandmade</button>
@@ -416,7 +447,7 @@ function renderCatalog(){
 function updateDashboard(){
   document.getElementById('statItems').textContent = state.catalog.length;
   if(state.catalog.length>0){
-    const avg = state.catalog.reduce((s,l)=>s+(l.marketplace_readiness||0),0)/state.catalog.length;
+    const avg = state.catalog.reduce((s,l)=>s+(l.ondc_digiready_score||0),0)/state.catalog.length;
     document.getElementById('statReadiness').textContent = avg.toFixed(1)+'/10';
   }
 }
